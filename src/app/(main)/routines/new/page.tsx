@@ -468,24 +468,35 @@ export default function NewRoutinePage() {
                     <Input
                       label="Series"
                       type="number"
+                      inputMode="numeric"
                       min={1}
                       value={ex.target_sets}
                       onChange={(e) =>
-                        updateExercise(index, 'target_sets', parseInt(e.target.value) || 1)
+                        updateExercise(index, 'target_sets', e.target.value === '' ? '' as unknown as number : parseInt(e.target.value) || 0)
                       }
+                      onBlur={(e) => {
+                        const v = parseInt(e.target.value);
+                        if (!v || v < 1) updateExercise(index, 'target_sets', 1);
+                      }}
                     />
                     <Input
                       label="Reps"
                       type="number"
+                      inputMode="numeric"
                       min={1}
                       value={ex.target_reps}
                       onChange={(e) =>
-                        updateExercise(index, 'target_reps', parseInt(e.target.value) || 1)
+                        updateExercise(index, 'target_reps', e.target.value === '' ? '' as unknown as number : parseInt(e.target.value) || 0)
                       }
+                      onBlur={(e) => {
+                        const v = parseInt(e.target.value);
+                        if (!v || v < 1) updateExercise(index, 'target_reps', 1);
+                      }}
                     />
                     <Input
                       label="Peso (kg)"
                       type="number"
+                      inputMode="decimal"
                       min={0}
                       step={0.5}
                       value={ex.target_weight_kg ?? ''}
@@ -501,12 +512,17 @@ export default function NewRoutinePage() {
                     <Input
                       label="Descanso (s)"
                       type="number"
+                      inputMode="numeric"
                       min={0}
                       step={5}
                       value={ex.rest_seconds}
                       onChange={(e) =>
-                        updateExercise(index, 'rest_seconds', parseInt(e.target.value) || 0)
+                        updateExercise(index, 'rest_seconds', e.target.value === '' ? '' as unknown as number : parseInt(e.target.value) || 0)
                       }
+                      onBlur={(e) => {
+                        const v = parseInt(e.target.value);
+                        if (!v || v < 0) updateExercise(index, 'rest_seconds', 90);
+                      }}
                     />
                   </div>
 
