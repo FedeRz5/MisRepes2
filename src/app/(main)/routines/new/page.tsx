@@ -152,6 +152,13 @@ export default function NewRoutinePage() {
       return;
     }
 
+    // Validate exercises have series and reps
+    const invalidEx = exercises.find((ex) => !ex.target_sets || !ex.target_reps);
+    if (invalidEx) {
+      setError(`Completá series y reps para "${invalidEx.exercise.name}"`);
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
@@ -470,28 +477,22 @@ export default function NewRoutinePage() {
                       type="number"
                       inputMode="numeric"
                       min={1}
-                      value={ex.target_sets}
+                      value={ex.target_sets === 0 ? '' : ex.target_sets}
                       onChange={(e) =>
-                        updateExercise(index, 'target_sets', e.target.value === '' ? '' as unknown as number : parseInt(e.target.value) || 0)
+                        updateExercise(index, 'target_sets', e.target.value === '' ? 0 : parseInt(e.target.value) || 0)
                       }
-                      onBlur={(e) => {
-                        const v = parseInt(e.target.value);
-                        if (!v || v < 1) updateExercise(index, 'target_sets', 1);
-                      }}
+                      placeholder="0"
                     />
                     <Input
                       label="Reps"
                       type="number"
                       inputMode="numeric"
                       min={1}
-                      value={ex.target_reps}
+                      value={ex.target_reps === 0 ? '' : ex.target_reps}
                       onChange={(e) =>
-                        updateExercise(index, 'target_reps', e.target.value === '' ? '' as unknown as number : parseInt(e.target.value) || 0)
+                        updateExercise(index, 'target_reps', e.target.value === '' ? 0 : parseInt(e.target.value) || 0)
                       }
-                      onBlur={(e) => {
-                        const v = parseInt(e.target.value);
-                        if (!v || v < 1) updateExercise(index, 'target_reps', 1);
-                      }}
+                      placeholder="0"
                     />
                     <Input
                       label="Peso (kg)"
@@ -515,14 +516,11 @@ export default function NewRoutinePage() {
                       inputMode="numeric"
                       min={0}
                       step={5}
-                      value={ex.rest_seconds}
+                      value={ex.rest_seconds === 0 ? '' : ex.rest_seconds}
                       onChange={(e) =>
-                        updateExercise(index, 'rest_seconds', e.target.value === '' ? '' as unknown as number : parseInt(e.target.value) || 0)
+                        updateExercise(index, 'rest_seconds', e.target.value === '' ? 0 : parseInt(e.target.value) || 0)
                       }
-                      onBlur={(e) => {
-                        const v = parseInt(e.target.value);
-                        if (!v || v < 0) updateExercise(index, 'rest_seconds', 90);
-                      }}
+                      placeholder="0"
                     />
                   </div>
 

@@ -37,7 +37,9 @@ import {
   Trophy,
   Calendar,
   History,
+  Trash2,
 } from "lucide-react";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 /* ─── Color Maps ─── */
 
@@ -173,6 +175,9 @@ export default function ExercisesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editVideoUrl, setEditVideoUrl] = useState("");
   const [savingVideo, setSavingVideo] = useState(false);
+
+  // Delete exercise
+  const [deleteExerciseId, setDeleteExerciseId] = useState<string | null>(null);
 
   const isStaff =
     profile?.role === "trainer" || profile?.role === "owner";
@@ -312,6 +317,19 @@ export default function ExercisesPage() {
       setEditVideoUrl("");
     }
     setSavingVideo(false);
+  }
+
+  async function handleDeleteExercise() {
+    if (!deleteExerciseId) return;
+    const { error } = await supabase
+      .from("exercises")
+      .delete()
+      .eq("id", deleteExerciseId);
+    if (!error) {
+      setExercises((prev) => prev.filter((ex) => ex.id !== deleteExerciseId));
+      if (expandedId === deleteExerciseId) setExpandedId(null);
+    }
+    setDeleteExerciseId(null);
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -752,6 +770,20 @@ export default function ExercisesPage() {
                           Personal
                         </Badge>
                       )}
+
+                      {/* Delete button — only for personal exercises created by user */}
+                      {!exercise.is_global && exercise.created_by === profile?.id && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteExerciseId(exercise.id);
+                          }}
+                          className="ml-auto inline-flex items-center gap-1.5 text-xs text-danger hover:text-danger/80 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Eliminar
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -913,6 +945,17 @@ export default function ExercisesPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Delete exercise confirm */}
+      <ConfirmDialog
+        open={!!deleteExerciseId}
+        onClose={() => setDeleteExerciseId(null)}
+        onConfirm={handleDeleteExercise}
+        title="Eliminar ejercicio"
+        message="¿Estás seguro? Si este ejercicio está en alguna rutina o sesión, no se podrá eliminar."
+        confirmText="Eliminar"
+        variant="danger"
+      />
     </div>
   );
 }
