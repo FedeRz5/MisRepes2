@@ -9,6 +9,7 @@ import type {
   Routine,
   RoutineExercise,
   RoutineAssignment,
+  Exercise,
 } from '@/types/database';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -29,7 +30,21 @@ import {
   X,
   Save,
   Weight,
+  Plus,
+  Search,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
+
+interface EditableExercise {
+  routineExerciseId: string | null; // null = nuevo, no guardado aún
+  exercise: Exercise;
+  target_sets: number;
+  target_reps: number;
+  target_weight_kg: number | null;
+  rest_seconds: number;
+  notes: string;
+}
 
 export default function RoutineDetailPage({
   params,
@@ -69,6 +84,13 @@ export default function RoutineDetailPage({
 
   // Start session
   const [startingSession, setStartingSession] = useState(false);
+
+  // Edit exercises
+  const [editExercises, setEditExercises] = useState<EditableExercise[]>([]);
+  const [showExSearch, setShowExSearch] = useState(false);
+  const [exSearchQuery, setExSearchQuery] = useState('');
+  const [exSearchResults, setExSearchResults] = useState<Exercise[]>([]);
+  const [exSearchLoading, setExSearchLoading] = useState(false);
 
   const isOwnerOrStaff =
     profile?.role === 'owner' || profile?.role === 'trainer';
@@ -153,12 +175,38 @@ export default function RoutineDetailPage({
     loadData();
   }, [loadData]);
 
+  // Debounced exercise search when editing
+  useEffect(() => {
+    if (!exSearchQuery.trim()) {
+      setExSearchResults([]);
+      return;
+    }
+    const timeout = setTimeout(async () => {
+      setExSearchLoading(true);
+      try {
+        const addedIds = new Set(editExercises.map((e) => e.exercise.id));
+        const { data } = await supabase
+          .from('exercises')
+          .select('*')
+          .ilike('name', `%${exSearchQuery}%`)
+          .limit(10);
+        setExSearchResults(
+          ((data ?? []) as Exercise[]).filter((e) => !addedIds.has(e.id))
+        );
+      } finally {
+        setExSearchLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [exSearchQuery, editExercises]);
+
   async function handleSaveEdit() {
     if (!editName.trim()) return;
     setSavingEdit(true);
     setError(null);
 
     try {
+      // 1. Save routine metadata
       const { error: err } = await supabase
         .from('routines')
         .update({
@@ -167,20 +215,59 @@ export default function RoutineDetailPage({
           day_of_week: editDay !== '' ? parseInt(editDay) : null,
         })
         .eq('id', routineId);
-
       if (err) throw err;
 
-      setRoutine((prev) =>
-        prev
-          ? {
-              ...prev,
-              name: editName.trim(),
-              description: editDescription.trim() || null,
-              day_of_week: editDay !== '' ? parseInt(editDay) : null,
-            }
-          : null
+      // 2. Delete exercises that were removed
+      const keptIds = new Set(
+        editExercises.filter((e) => e.routineExerciseId).map((e) => e.routineExerciseId!)
       );
+      const toDelete = routineExercises
+        .filter((re) => !keptIds.has(re.id))
+        .map((re) => re.id);
+      if (toDelete.length > 0) {
+        await supabase.from('routine_exercises').delete().in('id', toDelete);
+      }
+
+      // 3. Update existing exercises (order + config)
+      for (let i = 0; i < editExercises.length; i++) {
+        const ex = editExercises[i];
+        if (ex.routineExerciseId) {
+          await supabase
+            .from('routine_exercises')
+            .update({
+              order_index: i,
+              target_sets: ex.target_sets,
+              target_reps: ex.target_reps,
+              target_weight_kg: ex.target_weight_kg,
+              rest_seconds: ex.rest_seconds,
+              notes: ex.notes.trim() || null,
+            })
+            .eq('id', ex.routineExerciseId);
+        }
+      }
+
+      // 4. Insert new exercises
+      const insertRows = editExercises
+        .filter((ex) => !ex.routineExerciseId)
+        .map((ex) => ({
+          routine_id: routineId,
+          exercise_id: ex.exercise.id,
+          order_index: editExercises.indexOf(ex),
+          target_sets: ex.target_sets,
+          target_reps: ex.target_reps,
+          target_weight_kg: ex.target_weight_kg,
+          rest_seconds: ex.rest_seconds,
+          notes: ex.notes.trim() || null,
+        }));
+      if (insertRows.length > 0) {
+        await supabase.from('routine_exercises').insert(insertRows);
+      }
+
+      // 5. Reload and close edit mode
+      await loadData();
       setEditing(false);
+      setShowExSearch(false);
+      setExSearchQuery('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar');
     } finally {
@@ -393,7 +480,20 @@ export default function RoutineDetailPage({
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => setEditing(true)}
+                onClick={() => {
+                  setEditExercises(
+                    routineExercises.map((re) => ({
+                      routineExerciseId: re.id,
+                      exercise: re.exercise!,
+                      target_sets: re.target_sets,
+                      target_reps: re.target_reps,
+                      target_weight_kg: re.target_weight_kg,
+                      rest_seconds: re.rest_seconds,
+                      notes: re.notes ?? '',
+                    }))
+                  );
+                  setEditing(true);
+                }}
               >
                 <Pencil className="h-4 w-4" />
                 Editar
@@ -421,6 +521,9 @@ export default function RoutineDetailPage({
                       ? String(routine.day_of_week)
                       : ''
                   );
+                  setEditExercises([]);
+                  setShowExSearch(false);
+                  setExSearchQuery('');
                 }}
               >
                 Cancelar
@@ -442,25 +545,261 @@ export default function RoutineDetailPage({
 
       {/* Exercises */}
       <Card>
-        <h2 className="mb-4 text-lg font-semibold text-foreground">
-          Ejercicios
-          <span className="ml-2 text-sm font-normal text-muted">
-            ({routineExercises.length})
-          </span>
-        </h2>
-
-        {routineExercises.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <div
-              className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10"
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-foreground">
+            Ejercicios
+            <span className="ml-2 text-sm font-normal text-muted">
+              ({editing ? editExercises.length : routineExercises.length})
+            </span>
+          </h2>
+          {editing && canManage && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowExSearch(!showExSearch)}
             >
+              {showExSearch ? (
+                <>
+                  <X className="h-4 w-4" />
+                  Cerrar
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4" />
+                  Agregar
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+
+        {/* Exercise search panel (only in edit mode) */}
+        {editing && showExSearch && (
+          <div className="mb-4 rounded-lg border border-card-border bg-background p-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              <input
+                type="text"
+                value={exSearchQuery}
+                onChange={(e) => setExSearchQuery(e.target.value)}
+                placeholder="Buscar ejercicios..."
+                className="w-full rounded-lg border border-card-border bg-card-bg py-2 pl-10 pr-3 text-sm text-foreground placeholder:text-muted outline-none focus:border-primary"
+                autoFocus
+              />
+            </div>
+            {exSearchLoading && (
+              <div className="mt-2 flex items-center gap-2 text-xs text-muted">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Buscando...
+              </div>
+            )}
+            {exSearchResults.length > 0 && (
+              <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                {exSearchResults.map((ex) => (
+                  <li key={ex.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditExercises((prev) => [
+                          ...prev,
+                          {
+                            routineExerciseId: null,
+                            exercise: ex,
+                            target_sets: 3,
+                            target_reps: 10,
+                            target_weight_kg: null,
+                            rest_seconds: 60,
+                            notes: '',
+                          },
+                        ]);
+                        setExSearchQuery('');
+                        setExSearchResults([]);
+                      }}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-card-bg cursor-pointer"
+                    >
+                      <span>{ex.name}</span>
+                      <Badge color="gray">{muscleLabel(ex.muscle_group)}</Badge>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {exSearchQuery.trim() && !exSearchLoading && exSearchResults.length === 0 && (
+              <p className="mt-2 text-xs text-muted">
+                No se encontraron ejercicios
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Exercise list — read-only or editable */}
+        {(editing ? editExercises.length === 0 : routineExercises.length === 0) ? (
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
               <Dumbbell className="h-6 w-6 text-primary" />
             </div>
             <p className="text-sm text-muted">
-              Esta rutina no tiene ejercicios todavia
+              {editing
+                ? 'Usá "Agregar" para sumar ejercicios a la rutina'
+                : 'Esta rutina no tiene ejercicios todavia'}
             </p>
           </div>
+        ) : editing ? (
+          /* ── EDIT MODE: editable exercise list ── */
+          <div className="space-y-3">
+            {editExercises.map((ex, index) => (
+              <div
+                key={`${ex.exercise.id}-${index}`}
+                className="rounded-lg border border-card-border bg-background p-4"
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-white text-xs font-medium">
+                      {index + 1}
+                    </span>
+                    <span className="font-medium text-foreground truncate">
+                      {ex.exercise.name}
+                    </span>
+                    <Badge color="gray">{muscleLabel(ex.exercise.muscle_group)}</Badge>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1 ml-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (index === 0) return;
+                        setEditExercises((prev) => {
+                          const next = [...prev];
+                          [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                          return next;
+                        });
+                      }}
+                      disabled={index === 0}
+                      className="rounded p-1 text-muted transition-colors hover:bg-card-bg hover:text-foreground disabled:opacity-30 cursor-pointer"
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (index === editExercises.length - 1) return;
+                        setEditExercises((prev) => {
+                          const next = [...prev];
+                          [next[index], next[index + 1]] = [next[index + 1], next[index]];
+                          return next;
+                        });
+                      }}
+                      disabled={index === editExercises.length - 1}
+                      className="rounded p-1 text-muted transition-colors hover:bg-card-bg hover:text-foreground disabled:opacity-30 cursor-pointer"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditExercises((prev) => prev.filter((_, i) => i !== index))
+                      }
+                      className="rounded p-1 text-muted transition-colors hover:bg-danger/20 hover:text-danger cursor-pointer"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Input
+                    label="Series"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={ex.target_sets === 0 ? '' : ex.target_sets}
+                    onChange={(e) =>
+                      setEditExercises((prev) =>
+                        prev.map((item, i) =>
+                          i === index
+                            ? { ...item, target_sets: parseInt(e.target.value) || 1 }
+                            : item
+                        )
+                      )
+                    }
+                  />
+                  <Input
+                    label="Reps"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={ex.target_reps === 0 ? '' : ex.target_reps}
+                    onChange={(e) =>
+                      setEditExercises((prev) =>
+                        prev.map((item, i) =>
+                          i === index
+                            ? { ...item, target_reps: parseInt(e.target.value) || 1 }
+                            : item
+                        )
+                      )
+                    }
+                  />
+                  <Input
+                    label="Peso (kg)"
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step={0.5}
+                    value={ex.target_weight_kg ?? ''}
+                    onChange={(e) =>
+                      setEditExercises((prev) =>
+                        prev.map((item, i) =>
+                          i === index
+                            ? {
+                                ...item,
+                                target_weight_kg: e.target.value
+                                  ? parseFloat(e.target.value)
+                                  : null,
+                              }
+                            : item
+                        )
+                      )
+                    }
+                    placeholder="--"
+                  />
+                  <Input
+                    label="Descanso (s)"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    step={5}
+                    value={ex.rest_seconds === 0 ? '' : ex.rest_seconds}
+                    onChange={(e) =>
+                      setEditExercises((prev) =>
+                        prev.map((item, i) =>
+                          i === index
+                            ? { ...item, rest_seconds: parseInt(e.target.value) || 0 }
+                            : item
+                        )
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="mt-3">
+                  <Input
+                    label="Notas (opcional)"
+                    value={ex.notes}
+                    onChange={(e) =>
+                      setEditExercises((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, notes: e.target.value } : item
+                        )
+                      )
+                    }
+                    placeholder="Notas opcionales..."
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
+          /* ── VIEW MODE: read-only exercise list ── */
           <div className="space-y-3">
             {routineExercises.map((re, index) => (
               <div
@@ -468,9 +807,7 @@ export default function RoutineDetailPage({
                 className="rounded-lg border border-card-border bg-background p-4"
               >
                 <div className="flex items-start gap-3">
-                  <span
-                    className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-white text-sm font-semibold"
-                  >
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-white text-sm font-semibold">
                     {index + 1}
                   </span>
                   <div className="flex-1 min-w-0">

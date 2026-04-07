@@ -1048,10 +1048,10 @@ export default function SessionPage({
                   variant="ghost"
                   size="sm"
                   onClick={() => setImmersiveMode(true)}
-                  title="Modo Inmersivo"
+                  title="Modo Inmersivo — pantalla completa para entrenar"
                 >
                   <Maximize2 className="h-4 w-4" />
-                  <span className="hidden sm:inline">Inmersivo</span>
+                  <span className="ml-1">Inmersivo</span>
                 </Button>
               )}
               {(isFree || session.completed === false) && (

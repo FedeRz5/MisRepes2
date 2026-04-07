@@ -152,6 +152,9 @@ export default function ImmersiveMode({
   const [restTimeLeft, setRestTimeLeft] = useState(0);
   const [restTotal, setRestTotal] = useState(0);
 
+  // ── Set complete transition timer (ref avoids effect race conditions) ──
+  const setCompleteTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // ── Wake lock ──
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
@@ -169,6 +172,9 @@ export default function ImmersiveMode({
     return () => {
       wakeLockRef.current?.release();
       wakeLockRef.current = null;
+      if (setCompleteTimerRef.current) {
+        clearTimeout(setCompleteTimerRef.current);
+      }
     };
   }, []);
 
@@ -265,22 +271,19 @@ export default function ImmersiveMode({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewState.kind]);
 
-  // ── Auto-advance after set complete flash ──
-  useEffect(() => {
-    if (viewState.kind !== "setComplete") return;
-    const timeout = setTimeout(() => {
-      const restSecs = group?.routineExercise?.rest_seconds ?? 90;
-      setViewState({ kind: "rest", seconds: restSecs, total: restSecs });
-    }, 1200);
-    return () => clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewState.kind]);
+  // Note: setComplete → rest transition is handled directly in handleCompleteSet
+  // using setCompleteTimerRef to avoid effect-based race conditions.
 
   // ── Navigation ──
   const navigateTo = useCallback(
     (idx: number) => {
       if (idx < 0 || idx >= exerciseGroups.length || idx === currentIdx)
         return;
+      // Cancel any pending set-complete → rest transition
+      if (setCompleteTimerRef.current) {
+        clearTimeout(setCompleteTimerRef.current);
+        setCompleteTimerRef.current = null;
+      }
       const direction = idx > currentIdx ? -1 : 1;
       setIsAnimating(true);
       setTranslateX(direction * 100);
@@ -327,10 +330,20 @@ export default function ImmersiveMode({
     const remainingAfter = group.sets.filter(
       (s, i) => !s.completed && i !== currentSetIdx
     ).length;
+
     if (remainingAfter === 0) {
       setViewState({ kind: "exerciseComplete" });
     } else {
+      // Use ref-based timer to avoid effect race conditions.
+      // This ensures the rest timer always appears after the flash,
+      // regardless of parent re-renders or other state updates.
+      const restSecs = group.routineExercise?.rest_seconds ?? 90;
       setViewState({ kind: "setComplete", setNum: currentSet.set_number });
+      if (setCompleteTimerRef.current) clearTimeout(setCompleteTimerRef.current);
+      setCompleteTimerRef.current = setTimeout(() => {
+        setViewState({ kind: "rest", seconds: restSecs, total: restSecs });
+        setCompleteTimerRef.current = null;
+      }, 1200);
     }
   }
 
@@ -504,10 +517,27 @@ export default function ImmersiveMode({
       </div>
 
       {/* ─── Exercise indicator ─── */}
-      <div className="text-center flex-shrink-0 px-4">
-        <span className="text-xs font-semibold uppercase tracking-widest text-muted">
-          {currentIdx + 1} / {exerciseGroups.length}
-        </span>
+      <div className="flex-shrink-0 px-4">
+        {/* Exercise step dots */}
+        <div className="flex items-center justify-center gap-1.5">
+          {exerciseGroups.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => navigateTo(i)}
+              className={`rounded-full transition-all cursor-pointer ${
+                i === currentIdx
+                  ? "h-2 w-6 bg-primary"
+                  : "h-2 w-2 bg-card-border hover:bg-muted"
+              }`}
+            />
+          ))}
+        </div>
+        <p className="mt-1 text-center text-[10px] font-semibold uppercase tracking-widest text-muted">
+          Ejercicio {currentIdx + 1} de {exerciseGroups.length}
+          {exerciseGroups.length > 1 && (
+            <span className="ml-2 opacity-60">· deslizá para navegar</span>
+          )}
+        </p>
       </div>
 
       {/* ─── Main content with swipe animation ─── */}
@@ -661,21 +691,23 @@ export default function ImmersiveMode({
       </div>
 
       {/* ─── Side navigation arrows ─── */}
-      {currentIdx > 0 && (
-        <button
-          onClick={() => navigateTo(currentIdx - 1)}
-          className="absolute left-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-card-bg/80 text-muted backdrop-blur-sm transition-colors hover:bg-card-border hover:text-foreground cursor-pointer"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-      )}
-      {currentIdx < exerciseGroups.length - 1 && (
-        <button
-          onClick={() => navigateTo(currentIdx + 1)}
-          className="absolute right-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-card-bg/80 text-muted backdrop-blur-sm transition-colors hover:bg-card-border hover:text-foreground cursor-pointer"
-        >
-          <ChevronRight className="h-5 w-5" />
-        </button>
+      {exerciseGroups.length > 1 && (
+        <>
+          <button
+            onClick={() => navigateTo(currentIdx - 1)}
+            disabled={currentIdx === 0}
+            className="absolute left-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-card-bg/80 text-muted backdrop-blur-sm transition-colors hover:bg-card-border hover:text-foreground cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => navigateTo(currentIdx + 1)}
+            disabled={currentIdx === exerciseGroups.length - 1}
+            className="absolute right-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-card-bg/80 text-muted backdrop-blur-sm transition-colors hover:bg-card-border hover:text-foreground cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </>
       )}
 
       {/* ─── Bottom safe area spacer ─── */}
