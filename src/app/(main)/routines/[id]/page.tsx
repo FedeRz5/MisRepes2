@@ -85,6 +85,9 @@ export default function RoutineDetailPage({
   // Start session
   const [startingSession, setStartingSession] = useState(false);
 
+  // Tab (solo para owner/trainer)
+  const [activeTab, setActiveTab] = useState<'entrenar' | 'usuarios'>('entrenar');
+
   // Edit exercises
   const [editExercises, setEditExercises] = useState<EditableExercise[]>([]);
   const [showExSearch, setShowExSearch] = useState(false);
@@ -850,87 +853,134 @@ export default function RoutineDetailPage({
         )}
       </Card>
 
-      {/* Start session */}
-      <Card>
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h3 className="font-semibold text-foreground">Entrenar</h3>
-            <p className="text-sm text-muted">
-              Inicia una sesion con esta rutina
-            </p>
-          </div>
-          <Button loading={startingSession} onClick={handleStartSession}>
-            <Play className="h-4 w-4" />
-            Iniciar Sesion
-          </Button>
-        </div>
-      </Card>
-
-      {/* Assignments (staff or creator) */}
-      {canManage && isOwnerOrStaff && (
-        <Card>
-          <h2 className="mb-4 text-lg font-semibold text-foreground">
-            <UserPlus className="mb-0.5 mr-2 inline h-5 w-5" />
-            Asignar a Usuario
-          </h2>
-
-          {/* Assign form */}
-          <div className="mb-4 flex gap-3">
-            <div className="flex-1">
-              <Select
-                value={selectedUserId}
-                onChange={(e) => setSelectedUserId(e.target.value)}
-              >
-                <option value="">Seleccionar usuario...</option>
-                {availableUsers.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.full_name} ({u.email})
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <Button
-              onClick={handleAssign}
-              loading={assigning}
-              disabled={!selectedUserId}
+      {/* Tabs — solo para owner/trainer, usuario normal ve directo el botón */}
+      {canManage && isOwnerOrStaff ? (
+        <Card padding="none">
+          {/* Tab nav */}
+          <div className="flex border-b border-card-border">
+            <button
+              onClick={() => setActiveTab('entrenar')}
+              className={`flex flex-1 items-center justify-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors cursor-pointer ${
+                activeTab === 'entrenar'
+                  ? 'border-b-2 border-primary text-primary'
+                  : 'text-muted hover:text-foreground'
+              }`}
             >
-              Asignar
+              <Play className="h-4 w-4" />
+              Para mí
+            </button>
+            <button
+              onClick={() => setActiveTab('usuarios')}
+              className={`flex flex-1 items-center justify-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors cursor-pointer ${
+                activeTab === 'usuarios'
+                  ? 'border-b-2 border-primary text-primary'
+                  : 'text-muted hover:text-foreground'
+              }`}
+            >
+              <UserPlus className="h-4 w-4" />
+              Usuarios
+              {assignments.length > 0 && (
+                <span className={`flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1 text-xs font-bold ${
+                  activeTab === 'usuarios' ? 'bg-primary text-white' : 'bg-card-border text-muted'
+                }`}>
+                  {assignments.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Tab: Entrenar */}
+          {activeTab === 'entrenar' && (
+            <div className="flex items-center justify-between gap-4 p-5">
+              <div>
+                <h3 className="font-semibold text-foreground">Iniciar entrenamiento</h3>
+                <p className="mt-0.5 text-sm text-muted">
+                  Empezá una sesión con esta rutina
+                </p>
+              </div>
+              <Button loading={startingSession} onClick={handleStartSession}>
+                <Play className="h-4 w-4" />
+                Iniciar
+              </Button>
+            </div>
+          )}
+
+          {/* Tab: Usuarios */}
+          {activeTab === 'usuarios' && (
+            <div className="p-5 space-y-4">
+              {/* Assign form */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <Select
+                    value={selectedUserId}
+                    onChange={(e) => setSelectedUserId(e.target.value)}
+                  >
+                    <option value="">Seleccionar usuario...</option>
+                    {availableUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.full_name} ({u.email})
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <Button
+                  onClick={handleAssign}
+                  loading={assigning}
+                  disabled={!selectedUserId}
+                >
+                  Asignar
+                </Button>
+              </div>
+
+              {/* Current assignments */}
+              {assignments.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-muted">
+                    Asignaciones activas
+                  </p>
+                  {assignments.map((a) => (
+                    <div
+                      key={a.id}
+                      className="flex items-center justify-between rounded-xl border border-card-border bg-background px-4 py-3"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {a.profile?.full_name ?? 'Usuario'}
+                        </p>
+                        <p className="text-xs text-muted">{a.profile?.email}</p>
+                      </div>
+                      <button
+                        onClick={() => setRemoveAssignmentId(a.id)}
+                        className="rounded-lg p-1.5 text-muted transition-colors hover:bg-danger/15 hover:text-danger cursor-pointer"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted">
+                  Ningún usuario tiene esta rutina asignada.
+                </p>
+              )}
+            </div>
+          )}
+        </Card>
+      ) : (
+        /* Usuario normal: solo ve el botón de entrenar */
+        <Card>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="font-semibold text-foreground">Entrenar</h3>
+              <p className="mt-0.5 text-sm text-muted">
+                Iniciá una sesión con esta rutina
+              </p>
+            </div>
+            <Button loading={startingSession} onClick={handleStartSession}>
+              <Play className="h-4 w-4" />
+              Iniciar
             </Button>
           </div>
-
-          {/* Current assignments */}
-          {assignments.length > 0 ? (
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium text-muted">
-                Asignaciones activas
-              </h3>
-              {assignments.map((a) => (
-                <div
-                  key={a.id}
-                  className="flex items-center justify-between rounded-lg border border-card-border bg-background px-4 py-3"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {a.profile?.full_name ?? 'Usuario'}
-                    </p>
-                    <p className="text-xs text-muted">
-                      {a.profile?.email}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setRemoveAssignmentId(a.id)}
-                    className="rounded p-1.5 text-muted transition-colors hover:bg-danger/20 hover:text-danger cursor-pointer"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted">
-              Esta rutina no esta asignada a ningun usuario
-            </p>
-          )}
         </Card>
       )}
 
