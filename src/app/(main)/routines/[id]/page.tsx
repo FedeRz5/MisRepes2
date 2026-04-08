@@ -3,13 +3,16 @@
 import { use, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { DAY_NAMES, MUSCLE_GROUPS } from '@/lib/constants';
+import { DAY_NAMES, MUSCLE_GROUPS, EQUIPMENT_TYPES, EXERCISE_TYPES } from '@/lib/constants';
 import type {
   Profile,
   Routine,
   RoutineExercise,
   RoutineAssignment,
   Exercise,
+  MuscleGroup,
+  Equipment,
+  ExerciseType,
 } from '@/types/database';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -94,6 +97,17 @@ export default function RoutineDetailPage({
   const [exSearchQuery, setExSearchQuery] = useState('');
   const [exSearchResults, setExSearchResults] = useState<Exercise[]>([]);
   const [exSearchLoading, setExSearchLoading] = useState(false);
+
+  // Quick create exercise modal (dentro de edición de rutina)
+  const [showCreateExercise, setShowCreateExercise] = useState(false);
+  const [savingExercise, setSavingExercise] = useState(false);
+  const [createExError, setCreateExError] = useState('');
+  const [newEx, setNewEx] = useState({
+    name: '',
+    muscle_group: 'pecho' as MuscleGroup,
+    exercise_type: 'compuesto' as ExerciseType,
+    equipment: 'barra' as Equipment,
+  });
 
   const isOwnerOrStaff =
     profile?.role === 'owner' || profile?.role === 'trainer';
@@ -202,6 +216,57 @@ export default function RoutineDetailPage({
     }, 300);
     return () => clearTimeout(timeout);
   }, [exSearchQuery, editExercises]);
+
+  async function handleCreateExercise(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newEx.name.trim()) {
+      setCreateExError('El nombre es obligatorio');
+      return;
+    }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    setSavingExercise(true);
+    setCreateExError('');
+
+    const { data, error: err } = await supabase
+      .from('exercises')
+      .insert({
+        name: newEx.name.trim(),
+        muscle_group: newEx.muscle_group,
+        exercise_type: newEx.exercise_type,
+        equipment: newEx.equipment,
+        is_global: false,
+        created_by: user.id,
+      })
+      .select()
+      .single();
+
+    if (err || !data) {
+      setCreateExError(err?.message || 'Error al crear el ejercicio');
+      setSavingExercise(false);
+      return;
+    }
+
+    // Agregar el ejercicio nuevo directamente a la lista de edición
+    setEditExercises((prev) => [
+      ...prev,
+      {
+        routineExerciseId: null,
+        exercise: data as Exercise,
+        target_sets: 3,
+        target_reps: 10,
+        target_weight_kg: null,
+        rest_seconds: 60,
+        notes: '',
+      },
+    ]);
+
+    setShowCreateExercise(false);
+    setNewEx({ name: '', muscle_group: 'pecho', exercise_type: 'compuesto', equipment: 'barra' });
+    setExSearchQuery('');
+    setSavingExercise(false);
+  }
 
   async function handleSaveEdit() {
     if (!editName.trim()) return;
@@ -633,6 +698,20 @@ export default function RoutineDetailPage({
                 No se encontraron ejercicios
               </p>
             )}
+            {/* Botón crear ejercicio nuevo */}
+            <button
+              type="button"
+              onClick={() => {
+                setNewEx((prev) => ({ ...prev, name: exSearchQuery.trim() }));
+                setShowCreateExercise(true);
+              }}
+              className="mt-2 flex w-full items-center gap-2 rounded-lg border border-dashed border-primary/40 px-3 py-2.5 text-sm text-primary transition-colors hover:bg-primary/5 cursor-pointer"
+            >
+              <Plus className="h-4 w-4" />
+              {exSearchQuery.trim()
+                ? `Crear "${exSearchQuery.trim()}" como ejercicio nuevo`
+                : 'Crear ejercicio nuevo'}
+            </button>
           </div>
         )}
 
@@ -854,7 +933,7 @@ export default function RoutineDetailPage({
       </Card>
 
       {/* Tabs — solo para owner/trainer, usuario normal ve directo el botón */}
-      {canManage && isOwnerOrStaff ? (
+      {!editing && canManage && isOwnerOrStaff ? (
         <Card padding="none">
           {/* Tab nav */}
           <div className="flex border-b border-card-border">
@@ -966,7 +1045,7 @@ export default function RoutineDetailPage({
             </div>
           )}
         </Card>
-      ) : (
+      ) : !editing ? (
         /* Usuario normal: solo ve el botón de entrenar */
         <Card>
           <div className="flex items-center justify-between gap-4">
@@ -982,7 +1061,66 @@ export default function RoutineDetailPage({
             </Button>
           </div>
         </Card>
-      )}
+      ) : null}
+
+      {/* Quick Create Exercise Modal */}
+      <Modal
+        open={showCreateExercise}
+        onClose={() => { setShowCreateExercise(false); setCreateExError(''); }}
+        title="Crear Ejercicio"
+        size="sm"
+      >
+        <form onSubmit={handleCreateExercise} className="space-y-4">
+          <Input
+            label="Nombre"
+            placeholder="Ej: Curl concentrado"
+            value={newEx.name}
+            onChange={(e) => setNewEx((prev) => ({ ...prev, name: e.target.value }))}
+            autoFocus
+            required
+          />
+          <Select
+            label="Grupo muscular"
+            value={newEx.muscle_group}
+            onChange={(e) => setNewEx((prev) => ({ ...prev, muscle_group: e.target.value as MuscleGroup }))}
+          >
+            {MUSCLE_GROUPS.map((mg) => (
+              <option key={mg.value} value={mg.value}>{mg.label}</option>
+            ))}
+          </Select>
+          <Select
+            label="Equipamiento"
+            value={newEx.equipment}
+            onChange={(e) => setNewEx((prev) => ({ ...prev, equipment: e.target.value as Equipment }))}
+          >
+            {EQUIPMENT_TYPES.map((eq) => (
+              <option key={eq.value} value={eq.value}>{eq.label}</option>
+            ))}
+          </Select>
+          <Select
+            label="Tipo"
+            value={newEx.exercise_type}
+            onChange={(e) => setNewEx((prev) => ({ ...prev, exercise_type: e.target.value as ExerciseType }))}
+          >
+            {EXERCISE_TYPES.map((et) => (
+              <option key={et.value} value={et.value}>{et.label}</option>
+            ))}
+          </Select>
+          {createExError && <p className="text-sm text-danger">{createExError}</p>}
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => { setShowCreateExercise(false); setCreateExError(''); }}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" loading={savingExercise}>
+              Crear y Agregar
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Delete routine confirm */}
       <ConfirmDialog

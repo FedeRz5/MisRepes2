@@ -512,6 +512,7 @@ export default function SessionPage({
   const [allExercises, setAllExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const setsInitializedRef = useRef(false);
   const [lastWeights, setLastWeights] = useState<
     Map<string, number>
   >(new Map());
@@ -613,7 +614,8 @@ export default function SessionPage({
         }
       }
 
-      if (setsToCreate.length > 0) {
+      if (setsToCreate.length > 0 && !setsInitializedRef.current) {
+        setsInitializedRef.current = true;
         const { data: newSets } = await supabase
           .from("workout_sets")
           .insert(setsToCreate)
