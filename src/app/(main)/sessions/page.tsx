@@ -13,7 +13,6 @@ import {
   Plus,
   CheckCircle,
   Clock,
-  Calendar,
   Dumbbell,
   Copy,
   Timer,
@@ -234,15 +233,19 @@ export default function SessionsPage() {
 
   function formatDate(dateStr: string) {
     const d = new Date(dateStr + "T12:00:00");
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+
+    if (d.toDateString() === today.toDateString()) return "Hoy";
+    if (d.toDateString() === yesterday.toDateString()) return "Ayer";
+
     return d.toLocaleDateString("es-ES", {
-      weekday: "long",
       day: "numeric",
-      month: "long",
-      year: "numeric",
+      month: "short",
+      year: d.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
     });
   }
-
-  const ratingLabels = ["", "Muy facil", "Facil", "Normal", "Dificil", "Muy dificil"];
 
   function applyQuickFilter(filter: string) {
     setActiveFilter(filter);
@@ -291,9 +294,9 @@ export default function SessionsPage() {
       </div>
 
       {/* Filters */}
-      <Card>
-        {/* Quick filter buttons */}
-        <div className="flex flex-wrap gap-2 mb-4">
+      <div className="space-y-3">
+        {/* Quick filters */}
+        <div className="flex flex-wrap gap-2">
           {([
             { key: "hoy", label: "Hoy" },
             { key: "semana", label: "Esta semana" },
@@ -303,51 +306,42 @@ export default function SessionsPage() {
             <button
               key={f.key}
               onClick={() => applyQuickFilter(f.key)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
+              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
                 activeFilter === f.key
                   ? "bg-primary text-white"
-                  : "bg-[var(--hover-bg)] text-muted hover:text-foreground hover:bg-card-border"
+                  : "bg-card-bg border border-card-border text-muted hover:text-foreground hover:border-primary/40"
               }`}
             >
               {f.label}
             </button>
           ))}
-        </div>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-          <div className="flex-1">
-            <Input
-              label="Desde"
-              type="date"
-              value={dateFrom}
-              onChange={(e) => {
-                setDateFrom(e.target.value);
-                setActiveFilter("");
-              }}
-            />
-          </div>
-          <div className="flex-1">
-            <Input
-              label="Hasta"
-              type="date"
-              value={dateTo}
-              onChange={(e) => {
-                setDateTo(e.target.value);
-                setActiveFilter("");
-              }}
-            />
-          </div>
-          {(dateFrom || dateTo) && (
-            <Button
-              variant="ghost"
-              size="sm"
+          {(dateFrom || dateTo) && activeFilter === "" && (
+            <button
               onClick={() => applyQuickFilter("todo")}
+              className="flex items-center gap-1 rounded-full border border-card-border px-3 py-1.5 text-sm text-muted hover:text-danger hover:border-danger/40 cursor-pointer transition-colors"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
               Limpiar
-            </Button>
+            </button>
           )}
         </div>
-      </Card>
+
+        {/* Date range */}
+        <div className="flex gap-3">
+          <Input
+            label="Desde"
+            type="date"
+            value={dateFrom}
+            onChange={(e) => { setDateFrom(e.target.value); setActiveFilter(""); }}
+          />
+          <Input
+            label="Hasta"
+            type="date"
+            value={dateTo}
+            onChange={(e) => { setDateTo(e.target.value); setActiveFilter(""); }}
+          />
+        </div>
+      </div>
 
       {/* Sessions List */}
       {loading ? (
@@ -371,10 +365,6 @@ export default function SessionsPage() {
       ) : (
         <div className="space-y-3">
           {filteredSessions.map((session) => {
-            const completedColor = session.completed
-              ? "bg-[var(--success)]/15 text-[color:var(--success)]"
-              : "bg-[var(--warning)]/15 text-[color:var(--warning)]";
-
             return (
               <Card
                 key={session.id}
@@ -382,69 +372,73 @@ export default function SessionsPage() {
                 className="group"
                 onClick={() => router.push(`/sessions/${session.id}`)}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={`flex h-10 w-10 items-center justify-center rounded-full ${completedColor}`}
-                    >
-                      {session.completed ? (
-                        <CheckCircle className="h-5 w-5" />
-                      ) : (
-                        <Clock className="h-5 w-5" />
+                <div className="flex items-center gap-3">
+                  {/* Status icon */}
+                  <div
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                      session.completed
+                        ? "bg-[var(--success)]/15 text-[color:var(--success)]"
+                        : "bg-[var(--warning)]/15 text-[color:var(--warning)]"
+                    }`}
+                  >
+                    {session.completed ? (
+                      <CheckCircle className="h-5 w-5" />
+                    ) : (
+                      <Clock className="h-5 w-5" />
+                    )}
+                  </div>
+
+                  {/* Content */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-semibold text-foreground">
+                        {session.routine?.name ?? "Sesión Libre"}
+                      </span>
+                      {!session.completed && (
+                        <Badge color="yellow" size="sm">En progreso</Badge>
                       )}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-foreground">
-                          {session.routine?.name ?? "Sesion Libre"}
-                        </span>
-                        <Badge color={session.completed ? "green" : "yellow"} size="sm">
-                          {session.completed ? "Completada" : "En progreso"}
-                        </Badge>
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-3.5 w-3.5" />
-                          {formatDate(session.date)}
-                        </span>
-                        {session.duration_minutes && (
+                    <div className="mt-0.5 flex items-center gap-2 text-sm text-muted">
+                      <span>{formatDate(session.date)}</span>
+                      {session.duration_minutes && (
+                        <>
+                          <span className="text-card-border">·</span>
                           <span className="flex items-center gap-1">
-                            <Timer className="h-3.5 w-3.5" />
+                            <Timer className="h-3 w-3" />
                             {formatDuration(session.duration_minutes)}
                           </span>
-                        )}
-                        {session.completed && session.rating && (
-                          <span className="flex items-center gap-1">
-                            <Star className="h-3.5 w-3.5 fill-[var(--warning)] text-[color:var(--warning)]" />
-                            <span className="text-xs">{ratingLabels[session.rating]}</span>
+                        </>
+                      )}
+                      {session.completed && session.rating && (
+                        <>
+                          <span className="text-card-border">·</span>
+                          <span className="flex items-center gap-0.5">
+                            <Star className="h-3 w-3 fill-[var(--warning)] text-[color:var(--warning)]" />
+                            <span className="text-xs">{session.rating}/5</span>
                           </span>
-                        )}
-                      </div>
+                        </>
+                      )}
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      duplicateSession(session);
-                    }}
-                    disabled={creating}
-                    title="Duplicar sesion"
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteSessionId(session.id);
-                    }}
-                    title="Eliminar sesion"
-                  >
-                    <Trash2 className="h-4 w-4 text-danger" />
-                  </Button>
+
+                  {/* Actions */}
+                  <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); duplicateSession(session); }}
+                      disabled={creating}
+                      title="Repetir sesión"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-card-border hover:text-foreground cursor-pointer"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeleteSessionId(session.id); }}
+                      title="Eliminar sesión"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-danger/15 hover:text-danger cursor-pointer"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </Card>
             );

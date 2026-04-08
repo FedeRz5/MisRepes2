@@ -24,8 +24,6 @@ import {
   Search,
   Plus,
   Dumbbell,
-  ChevronDown,
-  ChevronUp,
   Globe,
   User,
   Filter,
@@ -35,7 +33,6 @@ import {
   Check,
   Loader2,
   Trophy,
-  Calendar,
   History,
   Trash2,
 } from "lucide-react";
@@ -140,7 +137,6 @@ export default function ExercisesPage() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [exerciseHistory, setExerciseHistory] = useState<Map<string, {
     entries: { date: string; sets: number; reps: number; maxWeight: number }[];
     prWeight: number;
@@ -178,6 +174,9 @@ export default function ExercisesPage() {
 
   // Delete exercise
   const [deleteExerciseId, setDeleteExerciseId] = useState<string | null>(null);
+
+  // Detail modal
+  const [detailExercise, setDetailExercise] = useState<Exercise | null>(null);
 
   const isStaff =
     profile?.role === "trainer" || profile?.role === "owner";
@@ -327,7 +326,6 @@ export default function ExercisesPage() {
       .eq("id", deleteExerciseId);
     if (!error) {
       setExercises((prev) => prev.filter((ex) => ex.id !== deleteExerciseId));
-      if (expandedId === deleteExerciseId) setExpandedId(null);
     }
     setDeleteExerciseId(null);
   }
@@ -509,15 +507,13 @@ export default function ExercisesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((exercise) => {
-            const isExpanded = expandedId === exercise.id;
             return (
               <Card
                 key={exercise.id}
                 className="cursor-pointer transition-all duration-200 hover:border-primary/30 flex flex-col"
                 onClick={() => {
-                  const newId = isExpanded ? null : exercise.id;
-                  setExpandedId(newId);
-                  if (newId) loadExerciseHistory(newId);
+                  setDetailExercise(exercise);
+                  loadExerciseHistory(exercise.id);
                 }}
               >
                 {/* Header */}
@@ -525,28 +521,16 @@ export default function ExercisesPage() {
                   <h3 className="font-semibold text-foreground leading-snug">
                     {exercise.name}
                   </h3>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <span
+                    className={exercise.is_global ? "text-[var(--info)]" : "text-muted"}
+                    title={exercise.is_global ? "Ejercicio global" : "Ejercicio personal"}
+                  >
                     {exercise.is_global ? (
-                      <span
-                        className="text-[var(--info)]"
-                        title="Ejercicio global"
-                      >
-                        <Globe className="h-4 w-4" />
-                      </span>
+                      <Globe className="h-4 w-4" />
                     ) : (
-                      <span
-                        className="text-muted"
-                        title="Ejercicio personal"
-                      >
-                        <User className="h-4 w-4" />
-                      </span>
+                      <User className="h-4 w-4" />
                     )}
-                    {isExpanded ? (
-                      <ChevronUp className="h-4 w-4 text-muted" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-muted" />
-                    )}
-                  </div>
+                  </span>
                 </div>
 
                 {/* Badges */}
@@ -575,223 +559,180 @@ export default function ExercisesPage() {
                     {getLabelFor(exercise.exercise_type, EXERCISE_TYPES)}
                   </Badge>
                 </div>
-
-                {/* Expanded Details */}
-                {isExpanded && (
-                  <div className="mt-4 space-y-3 border-t border-card-border pt-4">
-                    {exercise.secondary_muscle_group && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-muted">
-                          Secundario:
-                        </span>
-                        <Badge
-                          color={
-                            muscleGroupColor[
-                              exercise.secondary_muscle_group
-                            ] ?? "gray"
-                          }
-                        >
-                          {getLabelFor(
-                            exercise.secondary_muscle_group,
-                            MUSCLE_GROUPS
-                          )}
-                        </Badge>
-                      </div>
-                    )}
-
-                    {/* Video */}
-                    {exercise.video_url && getYouTubeId(exercise.video_url) ? (
-                      <div>
-                        <p className="text-xs font-medium text-muted mb-2">
-                          Video de ejemplo
-                        </p>
-                        <div className="relative w-full overflow-hidden rounded-lg" style={{ paddingBottom: "56.25%" }}>
-                          <iframe
-                            className="absolute inset-0 h-full w-full"
-                            src={`https://www.youtube.com/embed/${getYouTubeId(exercise.video_url)}`}
-                            title={exercise.name}
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                          />
-                        </div>
-                      </div>
-                    ) : exercise.video_url ? (
-                      <div>
-                        <p className="text-xs font-medium text-muted mb-1">Video</p>
-                        <a
-                          href={exercise.video_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
-                        >
-                          <Play className="h-3.5 w-3.5" />
-                          Ver video
-                        </a>
-                      </div>
-                    ) : null}
-
-                    {/* Edit video - for trainers/owners or exercise creator */}
-                    {(isStaff || exercise.created_by === profile?.id) && (
-                      <div>
-                        {editingId === exercise.id ? (
-                          <div className="flex items-end gap-2">
-                            <div className="flex-1">
-                              <Input
-                                label="URL de YouTube"
-                                placeholder="https://www.youtube.com/watch?v=..."
-                                value={editVideoUrl}
-                                onChange={(e) => setEditVideoUrl(e.target.value)}
-                              />
-                            </div>
-                            <Button
-                              size="sm"
-                              loading={savingVideo}
-                              onClick={() => handleSaveVideo(exercise.id)}
-                            >
-                              <Check className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => {
-                                setEditingId(null);
-                                setEditVideoUrl("");
-                              }}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingId(exercise.id);
-                              setEditVideoUrl(exercise.video_url || "");
-                            }}
-                            className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-primary transition-colors cursor-pointer"
-                          >
-                            <Pencil className="h-3 w-3" />
-                            {exercise.video_url ? "Cambiar video" : "Agregar video"}
-                          </button>
-                        )}
-                      </div>
-                    )}
-
-                    {exercise.instructions ? (
-                      <div>
-                        <p className="text-xs font-medium text-muted mb-1">
-                          Instrucciones
-                        </p>
-                        <p className="text-sm leading-relaxed text-foreground whitespace-pre-line">
-                          {exercise.instructions}
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-sm italic text-muted">
-                        Sin instrucciones
-                      </p>
-                    )}
-
-                    {/* Exercise History */}
-                    <div className="border-t border-card-border pt-3">
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <History className="h-3.5 w-3.5 text-primary" />
-                        <p className="text-xs font-medium text-muted">Tu Historial</p>
-                      </div>
-                      {(() => {
-                        const history = exerciseHistory.get(exercise.id);
-                        if (!history || history.loading) {
-                          return (
-                            <div className="flex items-center gap-2 py-3">
-                              <Loader2 className="h-4 w-4 animate-spin text-muted" />
-                              <span className="text-xs text-muted">Cargando historial...</span>
-                            </div>
-                          );
-                        }
-                        if (history.entries.length === 0) {
-                          return (
-                            <p className="text-xs text-muted italic py-2">
-                              Aun no has registrado este ejercicio
-                            </p>
-                          );
-                        }
-                        return (
-                          <div className="space-y-2">
-                            {/* PR section */}
-                            <div className="flex items-center gap-3 rounded-lg bg-[var(--warning)]/10 px-3 py-2">
-                              <Trophy className="h-4 w-4 text-[color:var(--warning)]" />
-                              <div className="flex gap-4 text-xs">
-                                <span className="text-foreground">
-                                  <span className="font-semibold">{history.prWeight} kg</span>{" "}
-                                  <span className="text-muted">max peso</span>
-                                </span>
-                                {history.pr1RM > 0 && (
-                                  <span className="text-foreground">
-                                    <span className="font-semibold">{history.pr1RM} kg</span>{" "}
-                                    <span className="text-muted">1RM est.</span>
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            {/* Last sessions */}
-                            <div className="space-y-1">
-                              {history.entries.map((entry) => (
-                                <div
-                                  key={entry.date}
-                                  className="flex items-center justify-between rounded-lg px-3 py-1.5 text-xs hover:bg-[var(--hover-bg)]"
-                                >
-                                  <span className="flex items-center gap-1.5 text-muted">
-                                    <Calendar className="h-3 w-3" />
-                                    {new Date(entry.date + "T12:00:00").toLocaleDateString("es-ES", {
-                                      day: "numeric",
-                                      month: "short",
-                                    })}
-                                  </span>
-                                  <span className="text-foreground font-medium">
-                                    {entry.sets}x{entry.reps} &middot; {entry.maxWeight} kg
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-
-                    <div className="flex items-center gap-1.5 pt-1">
-                      {exercise.is_global ? (
-                        <Badge color="blue">
-                          <Globe className="h-3 w-3 mr-1" />
-                          Global
-                        </Badge>
-                      ) : (
-                        <Badge color="gray">
-                          <User className="h-3 w-3 mr-1" />
-                          Personal
-                        </Badge>
-                      )}
-
-                      {/* Delete button — only for personal exercises created by user */}
-                      {!exercise.is_global && exercise.created_by === profile?.id && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteExerciseId(exercise.id);
-                          }}
-                          className="ml-auto inline-flex items-center gap-1.5 text-xs text-danger hover:text-danger/80 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Eliminar
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
               </Card>
             );
           })}
         </div>
       )}
+
+      {/* ─── Exercise Detail Modal ─── */}
+      <Modal
+        open={!!detailExercise}
+        onClose={() => {
+          setDetailExercise(null);
+          setEditingId(null);
+          setEditVideoUrl("");
+        }}
+        title={detailExercise?.name ?? ""}
+      >
+        {detailExercise && (() => {
+          const exercise = detailExercise;
+          const history = exerciseHistory.get(exercise.id);
+          return (
+            <div className="space-y-4">
+              {/* Badges */}
+              <div className="flex flex-wrap gap-1.5">
+                <Badge color={muscleGroupColor[exercise.muscle_group] ?? "gray"}>
+                  {getLabelFor(exercise.muscle_group, MUSCLE_GROUPS)}
+                </Badge>
+                <Badge color={equipmentColor[exercise.equipment] ?? "gray"}>
+                  {getLabelFor(exercise.equipment, EQUIPMENT_TYPES)}
+                </Badge>
+                <Badge color={exercise.exercise_type === "compuesto" ? "green" : "blue"}>
+                  {getLabelFor(exercise.exercise_type, EXERCISE_TYPES)}
+                </Badge>
+                {exercise.secondary_muscle_group && (
+                  <Badge color={muscleGroupColor[exercise.secondary_muscle_group] ?? "gray"}>
+                    + {getLabelFor(exercise.secondary_muscle_group, MUSCLE_GROUPS)}
+                  </Badge>
+                )}
+                {exercise.is_global ? (
+                  <Badge color="blue"><Globe className="h-3 w-3 mr-1" />Global</Badge>
+                ) : (
+                  <Badge color="gray"><User className="h-3 w-3 mr-1" />Personal</Badge>
+                )}
+              </div>
+
+              {/* Instructions */}
+              {exercise.instructions && (
+                <div className="rounded-xl bg-background p-4 border border-card-border">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-muted mb-2">Instrucciones</p>
+                  <p className="text-sm leading-relaxed text-foreground whitespace-pre-line">
+                    {exercise.instructions}
+                  </p>
+                </div>
+              )}
+
+              {/* Video */}
+              {exercise.video_url && getYouTubeId(exercise.video_url) ? (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-muted mb-2">Video</p>
+                  <div className="relative w-full overflow-hidden rounded-xl" style={{ paddingBottom: "56.25%" }}>
+                    <iframe
+                      className="absolute inset-0 h-full w-full"
+                      src={`https://www.youtube.com/embed/${getYouTubeId(exercise.video_url)}`}
+                      title={exercise.name}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                </div>
+              ) : exercise.video_url ? (
+                <a
+                  href={exercise.video_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+                >
+                  <Play className="h-3.5 w-3.5" />
+                  Ver video
+                </a>
+              ) : null}
+
+              {/* Edit video */}
+              {(isStaff || exercise.created_by === profile?.id) && (
+                <div>
+                  {editingId === exercise.id ? (
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <Input
+                          label="URL de YouTube"
+                          placeholder="https://www.youtube.com/watch?v=..."
+                          value={editVideoUrl}
+                          onChange={(e) => setEditVideoUrl(e.target.value)}
+                        />
+                      </div>
+                      <Button size="sm" loading={savingVideo} onClick={() => handleSaveVideo(exercise.id)}>
+                        <Check className="h-4 w-4" />
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => { setEditingId(null); setEditVideoUrl(""); }}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { setEditingId(exercise.id); setEditVideoUrl(exercise.video_url || ""); }}
+                      className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-primary transition-colors cursor-pointer"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      {exercise.video_url ? "Cambiar video" : "Agregar video"}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* History */}
+              <div className="border-t border-card-border pt-4">
+                <div className="flex items-center gap-1.5 mb-3">
+                  <History className="h-3.5 w-3.5 text-primary" />
+                  <p className="text-xs font-semibold uppercase tracking-widest text-muted">Tu Historial</p>
+                </div>
+                {!history || history.loading ? (
+                  <div className="flex items-center gap-2 py-3">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted" />
+                    <span className="text-xs text-muted">Cargando historial...</span>
+                  </div>
+                ) : history.entries.length === 0 ? (
+                  <p className="text-xs text-muted italic py-2">Aún no has registrado este ejercicio</p>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3 rounded-xl bg-[var(--warning)]/10 px-3 py-2.5">
+                      <Trophy className="h-4 w-4 text-[color:var(--warning)]" />
+                      <div className="flex gap-4 text-xs">
+                        <span>
+                          <span className="font-bold text-foreground">{history.prWeight} kg</span>
+                          <span className="ml-1 text-muted">máx. peso</span>
+                        </span>
+                        {history.pr1RM > 0 && (
+                          <span>
+                            <span className="font-bold text-foreground">{history.pr1RM} kg</span>
+                            <span className="ml-1 text-muted">1RM est.</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      {history.entries.map((entry) => (
+                        <div key={entry.date} className="flex items-center justify-between rounded-lg px-3 py-1.5 text-xs hover:bg-[var(--hover-bg)]">
+                          <span className="text-muted">
+                            {new Date(entry.date + "T12:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
+                          </span>
+                          <span className="font-medium text-foreground">
+                            {entry.sets} series · {entry.maxWeight} kg
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Delete */}
+              {!exercise.is_global && exercise.created_by === profile?.id && (
+                <div className="border-t border-card-border pt-3">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDeleteExerciseId(exercise.id); setDetailExercise(null); }}
+                    className="inline-flex items-center gap-1.5 text-sm text-danger hover:text-danger/80 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Eliminar ejercicio
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </Modal>
 
       {/* ─── Create Modal ─── */}
       <Modal

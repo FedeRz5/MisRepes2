@@ -17,8 +17,6 @@ import {
   Activity,
   ChevronRight,
   Clock,
-  Target,
-  CheckCircle,
 } from "lucide-react";
 import Link from "next/link";
 import type {
@@ -386,17 +384,19 @@ export default function DashboardPage() {
               </Link>
             </div>
           ) : (
-            <div className="text-center py-6">
-              <div className="inline-flex items-center justify-center p-3 rounded-full bg-[var(--hover-bg)] mb-3">
-                <Target className="h-6 w-6 text-muted" />
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <p className="font-medium text-foreground">Día libre</p>
+                <p className="text-sm text-muted mt-0.5">
+                  Sin rutina asignada para hoy. Podés hacer una sesión libre.
+                </p>
               </div>
-              <p className="text-foreground font-medium">
-                No tienes rutina asignada para hoy
-              </p>
-              <p className="text-muted text-sm mt-1">
-                Aprovecha para descansar o consulta con tu entrenador para
-                ajustar tu plan.
-              </p>
+              <Link href="/sessions" className="shrink-0">
+                <Button variant="secondary" size="lg" className="w-full sm:w-auto gap-2">
+                  <Play className="h-5 w-5" />
+                  Sesión libre
+                </Button>
+              </Link>
             </div>
           )}
         </div>
@@ -451,15 +451,14 @@ export default function DashboardPage() {
 
       {/* ─── Weekly Calendar ─── */}
       <Card>
-        <div className="flex items-center gap-2 mb-4">
-          <div className="p-1.5 rounded-lg bg-primary/15">
-            <Calendar className="h-4 w-4 text-primary" />
-          </div>
-          <h2 className="text-lg font-semibold text-foreground">
-            Tu Semana
-          </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-foreground">Tu semana</h2>
+          <span className="text-xs text-muted">
+            {weekSessions.filter(s => s.completed).length} de{" "}
+            {allAssignments.length} entrenamientos
+          </span>
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 snap-x snap-mandatory sm:overflow-x-visible sm:grid sm:grid-cols-7">
+        <div className="grid grid-cols-7 gap-1.5">
           {(() => {
             const now = new Date();
             const jsDay = now.getDay();
@@ -474,77 +473,64 @@ export default function DashboardPage() {
               dayDate.setDate(monday.getDate() + i);
               const dateStr = dayDate.toISOString().split("T")[0];
               const isToday = i === todayIdx;
+              const isPast = dayDate < new Date(now.toDateString());
+              const assignment = allAssignments.find((a) => a.routine?.day_of_week === i);
+              const trained = weekSessions.some((s) => s.date === dateStr && s.completed);
 
-              // Find routine assigned for this day
-              const assignment = allAssignments.find(
-                (a) => a.routine?.day_of_week === i
+              const dayContent = (
+                <div
+                  className={`flex flex-col items-center gap-1 rounded-xl p-2 transition-colors ${
+                    isToday
+                      ? "bg-primary text-white"
+                      : trained
+                      ? "bg-[var(--success)]/15 text-[color:var(--success)]"
+                      : assignment
+                      ? "bg-card-bg border border-card-border text-foreground hover:border-primary/40"
+                      : "bg-transparent text-muted"
+                  }`}
+                >
+                  <span className={`text-[10px] font-semibold uppercase ${isToday ? "text-white/70" : "text-inherit opacity-60"}`}>
+                    {dayName.slice(0, 2)}
+                  </span>
+                  <span className={`text-base font-bold leading-none ${isToday ? "text-white" : ""}`}>
+                    {dayDate.getDate()}
+                  </span>
+                  <div className="h-1.5 w-1.5 rounded-full">
+                    {trained ? (
+                      <div className="h-1.5 w-1.5 rounded-full bg-[color:var(--success)]" />
+                    ) : assignment && !isPast ? (
+                      <div className="h-1.5 w-1.5 rounded-full bg-primary/50" />
+                    ) : (
+                      <div className="h-1.5 w-1.5 rounded-full" />
+                    )}
+                  </div>
+                </div>
               );
 
-              // Check if user trained this day
-              const trained = weekSessions.some((s) => s.date === dateStr);
-
               return (
-                <div key={i} className="snap-center flex-shrink-0">
-                  {assignment ? (
-                    <Link
-                      href={`/sessions/new?routine=${assignment.routine_id}`}
-                      className="block"
-                    >
-                      <div
-                        className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 min-w-[5rem] transition-colors hover:bg-[var(--hover-bg)] ${
-                          isToday
-                            ? "border-primary bg-primary/5"
-                            : "border-card-border bg-background"
-                        }`}
-                      >
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted">
-                          {dayName.slice(0, 3)}
-                        </span>
-                        <span
-                          className={`text-lg font-bold ${
-                            isToday ? "text-primary" : "text-foreground"
-                          }`}
-                        >
-                          {dayDate.getDate()}
-                        </span>
-                        <span className="text-[11px] font-medium text-primary truncate max-w-full text-center leading-tight">
-                          {assignment.routine.name}
-                        </span>
-                        {trained && (
-                          <CheckCircle className="h-4 w-4 text-[color:var(--success)]" />
-                        )}
-                      </div>
+                <div key={i}>
+                  {assignment && !trained ? (
+                    <Link href={`/sessions/new?routine=${assignment.routine_id}`}>
+                      {dayContent}
                     </Link>
                   ) : (
-                    <div
-                      className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 min-w-[5rem] ${
-                        isToday
-                          ? "border-primary bg-primary/5"
-                          : "border-card-border bg-background"
-                      }`}
-                    >
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted">
-                        {dayName.slice(0, 3)}
-                      </span>
-                      <span
-                        className={`text-lg font-bold ${
-                          isToday ? "text-primary" : "text-foreground"
-                        }`}
-                      >
-                        {dayDate.getDate()}
-                      </span>
-                      <span className="text-[11px] text-muted">
-                        Descanso
-                      </span>
-                      {trained && (
-                        <CheckCircle className="h-4 w-4 text-[color:var(--success)]" />
-                      )}
-                    </div>
+                    dayContent
                   )}
                 </div>
               );
             });
           })()}
+        </div>
+        {/* Legend */}
+        <div className="mt-3 flex items-center gap-4 text-xs text-muted border-t border-card-border pt-3">
+          <span className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-[var(--success)]/50" />
+            Completado
+          </span>
+          <span className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-primary/30" />
+            Planificado
+          </span>
         </div>
       </Card>
 

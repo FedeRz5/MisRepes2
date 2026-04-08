@@ -345,43 +345,38 @@ function SetRow({
 }) {
   const [reps, setReps] = useState(String(set.reps));
   const [weight, setWeight] = useState(String(set.weight_kg));
-  const [rpe, setRpe] = useState(set.rpe ? String(set.rpe) : "");
 
-  // Keep local state in sync with prop changes (e.g. after save)
   useEffect(() => {
     setReps(String(set.reps));
     setWeight(String(set.weight_kg));
-    setRpe(set.rpe ? String(set.rpe) : "");
-  }, [set.reps, set.weight_kg, set.rpe]);
+  }, [set.reps, set.weight_kg]);
 
   function commitChanges() {
     const updates: Partial<WorkoutSet> = {};
     const newReps = parseInt(reps) || 0;
     const newWeight = parseFloat(weight) || 0;
-    const newRpe = rpe ? Math.min(10, Math.max(1, parseInt(rpe) || 0)) || null : null;
-
     if (newReps !== set.reps) updates.reps = newReps;
     if (newWeight !== set.weight_kg) updates.weight_kg = newWeight;
-    if (newRpe !== set.rpe) updates.rpe = newRpe;
-
     if (Object.keys(updates).length > 0) onUpdate(updates);
   }
 
-  const inputBase =
-    "w-full rounded-lg border border-card-border bg-background text-center text-sm font-medium text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+  const isCompleted = set.completed;
+  const inputCls = `h-12 w-full rounded-xl border bg-background text-center text-base font-semibold text-foreground outline-none transition-all focus:ring-2 focus:ring-primary/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+    isCompleted
+      ? "border-card-border/50 opacity-50 cursor-not-allowed"
+      : "border-card-border focus:border-primary"
+  }`;
 
   return (
     <div
-      className={`grid grid-cols-[2.5rem_1fr_1fr_2.5rem_2rem] items-center gap-2 px-4 py-2 transition-colors sm:grid-cols-[2.5rem_1fr_1fr_2.5rem_2.5rem] sm:gap-3 sm:px-5 ${
-        set.completed
-          ? "bg-[var(--success)]/5"
-          : ""
+      className={`flex items-center gap-2 px-4 py-2.5 sm:px-5 sm:gap-3 transition-colors ${
+        isCompleted ? "bg-[var(--success)]/5" : ""
       }`}
     >
-      {/* Set number */}
+      {/* Set number badge */}
       <div
-        className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
-          set.completed
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+          isCompleted
             ? "bg-[var(--success)]/20 text-[color:var(--success)]"
             : "bg-card-border text-muted"
         }`}
@@ -390,53 +385,47 @@ function SetRow({
       </div>
 
       {/* Weight */}
-      <div>
-        <div className="relative">
-          <input
-            type="number"
-            inputMode="decimal"
-            step="0.5"
-            min="0"
-            className={`${inputBase} h-11 px-2 sm:h-10`}
-            value={weight}
-            onChange={(e) => setWeight(e.target.value)}
-            onBlur={commitChanges}
-            disabled={disabled || set.completed}
-            placeholder="0"
-          />
-          <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-medium text-muted">
-            kg
-          </span>
-        </div>
-        {lastWeight != null && lastWeight > 0 && set.set_number === 1 && (
-          <span className="block mt-0.5 text-[10px] text-muted text-center leading-tight">
-            (ultimo: {lastWeight} kg)
-          </span>
+      <div className="flex-1">
+        <input
+          type="number"
+          inputMode="decimal"
+          step="0.5"
+          min="0"
+          className={inputCls}
+          value={weight}
+          onChange={(e) => setWeight(e.target.value)}
+          onBlur={commitChanges}
+          disabled={disabled || isCompleted}
+          placeholder="0"
+        />
+        {lastWeight != null && lastWeight > 0 && (
+          <p className="mt-0.5 text-center text-[10px] text-muted tabular-nums">
+            {lastWeight} kg
+          </p>
         )}
       </div>
 
+      <span className="shrink-0 text-sm font-medium text-muted">×</span>
+
       {/* Reps */}
-      <div className="relative">
+      <div className="flex-1">
         <input
           type="number"
           inputMode="numeric"
           min="0"
-          className={`${inputBase} h-11 px-2 sm:h-10`}
+          className={inputCls}
           value={reps}
           onChange={(e) => setReps(e.target.value)}
           onBlur={commitChanges}
-          disabled={disabled || set.completed}
+          disabled={disabled || isCompleted}
           placeholder="0"
         />
-        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-medium text-muted">
-          reps
-        </span>
       </div>
 
-      {/* Complete toggle */}
+      {/* Complete / Uncomplete */}
       <button
         onClick={() => {
-          if (set.completed) {
+          if (isCompleted) {
             onUncomplete();
           } else {
             commitChanges();
@@ -444,27 +433,31 @@ function SetRow({
           }
         }}
         disabled={disabled}
-        className="flex h-11 w-full items-center justify-center rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 hover:bg-card-border sm:h-10"
-        title={set.completed ? "Desmarcar" : "Completar serie"}
+        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 ${
+          isCompleted
+            ? "bg-[var(--success)]/15 text-[color:var(--success)]"
+            : "bg-card-border/50 text-muted hover:bg-[var(--success)]/15 hover:text-[color:var(--success)]"
+        }`}
+        title={isCompleted ? "Desmarcar" : "Completar serie"}
       >
-        {set.completed ? (
-          <CheckCircle className="h-6 w-6 text-[color:var(--success)]" />
+        {isCompleted ? (
+          <CheckCircle className="h-6 w-6" />
         ) : (
-          <Circle className="h-6 w-6 text-muted hover:text-[color:var(--success)]" />
+          <Circle className="h-6 w-6" />
         )}
       </button>
 
       {/* Delete */}
-      {!disabled && !set.completed ? (
+      {!disabled && !isCompleted ? (
         <button
           onClick={onDelete}
-          className="flex h-11 w-full items-center justify-center rounded-lg text-muted transition-colors hover:bg-card-border hover:text-danger cursor-pointer sm:h-10"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-card-border transition-colors hover:bg-card-border hover:text-danger cursor-pointer"
           title="Eliminar serie"
         >
-          <Trash2 className="h-4 w-4" />
+          <Trash2 className="h-3.5 w-3.5" />
         </button>
       ) : (
-        <div />
+        <div className="w-8 shrink-0" />
       )}
     </div>
   );
@@ -1205,12 +1198,13 @@ export default function SessionPage({
               {isExpanded && (
                 <div className="border-t border-card-border">
                   {/* Column headers */}
-                  <div className="grid grid-cols-[2.5rem_1fr_1fr_2.5rem_2rem] gap-2 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted sm:grid-cols-[2.5rem_1fr_1fr_2.5rem_2.5rem] sm:gap-3 sm:px-5">
-                    <div>Serie</div>
-                    <div>Peso</div>
-                    <div>Reps</div>
-                    <div></div>
-                    <div></div>
+                  <div className="flex items-center gap-2 px-4 py-1.5 sm:px-5 sm:gap-3">
+                    <div className="w-8 shrink-0 text-[10px] font-semibold uppercase tracking-widest text-muted">#</div>
+                    <div className="flex-1 text-center text-[10px] font-semibold uppercase tracking-widest text-muted">Peso (kg)</div>
+                    <div className="w-4 shrink-0" />
+                    <div className="flex-1 text-center text-[10px] font-semibold uppercase tracking-widest text-muted">Reps</div>
+                    <div className="w-12 shrink-0" />
+                    <div className="w-8 shrink-0" />
                   </div>
 
                   {/* Set rows */}
