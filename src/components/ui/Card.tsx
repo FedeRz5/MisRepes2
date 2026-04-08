@@ -1,6 +1,6 @@
 import { HTMLAttributes, ReactNode } from "react";
 
-type Padding = "compact" | "normal" | "spacious";
+type Padding = "compact" | "normal" | "spacious" | "none";
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
@@ -14,6 +14,7 @@ const paddingClasses: Record<Padding, string> = {
   compact: "p-3",
   normal: "p-5",
   spacious: "p-7",
+  none: "",
 };
 
 export default function Card({
