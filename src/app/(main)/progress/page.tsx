@@ -1200,9 +1200,10 @@ export default function ProgressPage() {
 
       {allSets.length === 0 ? (
         /* ─── Empty State ─── */
-        <Card className="flex flex-col items-center justify-center py-16 text-center">
+        <Card>
+          <div className="flex flex-col items-center justify-center py-16 text-center">
           <div
-            className="flex h-20 w-20 items-center justify-center rounded-2xl"
+            className="flex h-20 w-20 items-center justify-center rounded-2xl mx-auto"
             style={{ backgroundColor: "color-mix(in srgb, var(--primary) 10%, transparent)" }}
           >
             <BarChart3 className="h-10 w-10" style={{ color: "var(--primary)" }} />
@@ -1219,6 +1220,7 @@ export default function ProgressPage() {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </Link>
+          </div>
         </Card>
       ) : (
         <>
@@ -1492,9 +1494,10 @@ export default function ProgressPage() {
             <div className="space-y-5">
               {bodyMeasurements.length === 0 ? (
                 /* Empty state for body data */
-                <Card className="flex flex-col items-center justify-center py-12 text-center">
+                <Card>
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
                   <div
-                    className="flex h-16 w-16 items-center justify-center rounded-2xl"
+                    className="flex h-16 w-16 items-center justify-center rounded-2xl mx-auto"
                     style={{ backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)" }}
                   >
                     <Ruler className="h-8 w-8" style={{ color: "var(--accent)" }} />
@@ -1511,6 +1514,7 @@ export default function ProgressPage() {
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </Link>
+                  </div>
                 </Card>
               ) : (
                 <>
