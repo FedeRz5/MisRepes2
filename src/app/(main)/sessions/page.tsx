@@ -19,6 +19,7 @@ import {
   X,
   Star,
   Trash2,
+  Play,
 } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
@@ -51,6 +52,7 @@ export default function SessionsPage() {
 
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [routines, setRoutines] = useState<Routine[]>([]);
+  const [todayRoutine, setTodayRoutine] = useState<Routine | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -112,6 +114,14 @@ export default function SessionsPage() {
       if (r) map.set(r.id, r);
     });
     setRoutines(Array.from(map.values()));
+
+    // Find today's assigned routine by day_of_week (0=Mon...6=Sun)
+    const jsDay = new Date().getDay();
+    const appDay = (jsDay + 6) % 7;
+    const todayAssignment = (assignments as RoutineAssignment[] | null)?.find(
+      (a) => a.routine && (a.routine as Routine).day_of_week === appDay
+    );
+    setTodayRoutine(todayAssignment ? (todayAssignment.routine as Routine) : null);
   }
 
   async function createSession(routineId: string | null) {
@@ -343,24 +353,42 @@ export default function SessionsPage() {
         </div>
       </div>
 
+      {/* Today's routine banner */}
+      {!loading && todayRoutine && (
+        <Card>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wider text-muted mb-0.5">Hoy te toca</p>
+              <p className="font-semibold text-primary">{todayRoutine.name}</p>
+            </div>
+            <Button onClick={() => createSession(todayRoutine.id)} loading={creating}>
+              <Play className="h-4 w-4" />
+              Iniciar
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* Sessions List */}
       {loading ? (
         <SessionSkeleton />
       ) : filteredSessions.length === 0 ? (
-        <Card className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-            <Dumbbell className="h-8 w-8 text-primary" />
+        <Card>
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mx-auto">
+              <Dumbbell className="h-8 w-8 text-primary" />
+            </div>
+            <p className="mt-4 text-lg font-medium text-foreground">
+              No hay sesiones todavia
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              Crea tu primera sesion de entrenamiento
+            </p>
+            <Button className="mt-6" onClick={() => setModalOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Nueva Sesion
+            </Button>
           </div>
-          <p className="mt-4 text-lg font-medium text-foreground">
-            No hay sesiones todavia
-          </p>
-          <p className="mt-1 text-sm text-muted">
-            Crea tu primera sesion de entrenamiento
-          </p>
-          <Button className="mt-6" onClick={() => setModalOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Nueva Sesion
-          </Button>
         </Card>
       ) : (
         <div className="space-y-3">
